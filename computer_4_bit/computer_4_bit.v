@@ -1,0 +1,136 @@
+module computer_4_bit(INPUT_A,INPUT_B,command,ADDRESS,OUTPUT_A,OUTPUT_B,ZF,CF,clk,reset);
+
+input [3:0]INPUT_A,INPUT_B;
+//input [3:0]command;
+input [3:0]ADDRESS;
+output reg [3:0]OUTPUT_A,OUTPUT_B;
+output reg ZF, CF;
+
+input clk, reset;
+output reg [3:0]command;
+
+reg [3:0]AX;
+reg [3:0]BX;
+reg [15:0]SI;
+reg [3:0]stack_memory[15:0];
+reg [15:0] IP, SP;
+reg [3:0]temp;
+reg hlt;
+
+always @(posedge clk)
+ begin
+     SI[3:0] = 4'b0100;
+     SI[7:4] = 4'b0110;
+     SI[11:8] = 4'b1000;
+     SI[15:12] = 4'b1010;
+     
+   if (reset == 1) 
+    begin
+        command = -1;
+		hlt = 0;			
+		IP = ADDRESS;	 //pointer for SI			
+        SP = 15;         //pointer for stack_memory				
+		AX = INPUT_A;
+		BX = INPUT_B;
+        ZF = 0;
+        CF = 0;
+		OUTPUT_A = 4'bZZZZ;
+		OUTPUT_B = 4'bZZZZ;
+    end
+    
+    else if (reset == 0 && hlt == 0) 
+       begin
+         IP = IP + 1;
+         command = command + 1;
+            case(command)
+            00: begin                     // ADD AX,BX
+                 {CF,OUTPUT_A} = AX+BX;
+                 AX = OUTPUT_A; 
+                 ZF = (OUTPUT_A==0)? 1:0; 
+                end             
+            01: begin                      // SUB AX,BX
+                 {CF,OUTPUT_A} = AX-BX;
+                 AX = OUTPUT_A; 
+                 ZF = (OUTPUT_A==0)? 1:0; 
+                end              
+            02: begin                      // XCHG AX,BX
+                 temp = AX;
+                 AX = BX;
+                 BX = temp;
+                 OUTPUT_A = AX;
+                 OUTPUT_B = BX;
+                 ZF = (OUTPUT_A==0)? 1:0; 
+                end
+            03: begin                      // MOV AX, [ADDRESS]
+                 OUTPUT_A = SI[IP];   // Using IP to indicate the current address
+                 AX = OUTPUT_A; 
+                 ZF = (OUTPUT_A==0)? 1:0; 
+                end
+            04: begin                      // OUT AX
+                 OUTPUT_A = AX;
+                 ZF = (OUTPUT_A==0)? 1:0;
+                end              
+            05: begin                      // INC AX
+                 {CF, OUTPUT_A} = AX+1;
+                 AX = OUTPUT_A; 
+                 ZF = (OUTPUT_A==0)? 1:0; 
+                end         
+            06: begin                      // RCR AX
+                 OUTPUT_A[3:0]={CF, AX[3:1]};
+                 CF = AX[0];
+                 AX = OUTPUT_A; 
+                 ZF = (OUTPUT_A==0)? 1:0;
+		        end
+            07: begin 
+                 AX = IP;                // MOV AX, BYTE
+                 OUTPUT_A = AX;
+                 ZF = (OUTPUT_A==0)? 1:0;
+                end
+            08: begin                      // JNZ ADDRESS
+                 if (ZF == 0)
+			      IP = ADDRESS;
+			      OUTPUT_B = IP;           // using B to show the value of IP
+                end   
+            09: begin                      //PUSH BX
+                 stack_memory[SP] = BX;
+                 OUTPUT_A = stack_memory[SP]; // using A to show the value of stack_memory
+                 SP = SP - 1; 
+                 OUTPUT_B = SP;               // using B to show the value of SP
+                end
+            10: begin
+                 SP = SP + 1;        // POP BX
+                 BX = stack_memory[SP];         
+                 OUTPUT_B = stack_memory[SP];
+                 OUTPUT_A = SP;            // using OUTPUT_A to show the value SP
+                 ZF = (OUTPUT_B==0)? 1:0;
+                end
+            11: begin	                   // CALL ADDRESS
+	             OUTPUT_B = IP;            // CURRENT IP IN B
+	             stack_memory[SP] = IP;
+	       	     OUTPUT_A = stack_memory[SP]; // VALUE STORED IN SP
+	       	     IP = ADDRESS;
+		         SP = SP - 1;
+	            end
+            12: begin	                   // RET
+		         SP = SP + 1;
+		         OUTPUT_A = stack_memory[SP]; // CHECK THE VALUE IN MEMORY
+		         IP = stack_memory[SP];
+		         OUTPUT_B = IP;               // CHECK THE VALUE IS TRANSFERRED 
+		        end
+            13: begin                    // OR AX, [ADDRESS]
+                 OUTPUT_B = IP;
+                 OUTPUT_A= AX| SI[IP];   // Using IP to indicate the current address
+                 AX = OUTPUT_A;
+                 ZF = (OUTPUT_A==0)? 1:0;
+                end       
+            14: begin 
+                 OUTPUT_B = IP;                   // XOR AX, [ADDRESS]
+                 OUTPUT_A = AX^ SI[IP];   // Using IP to indicate the current address
+                 AX = OUTPUT_A;
+                 ZF = (OUTPUT_A==0)? 1:0;
+                end        
+            15: hlt = 1;                    // HLT
+            endcase
+    end
+ end
+endmodule
